@@ -1,12 +1,23 @@
+import { data, Link, redirect } from "react-router";
+import type { Route } from "./+types/login";
+import { getSession } from "~/sessions.server";
+
 export default function Login() {
   return (
     <div className="text-center p-4">
-      <a
+      <Link
         className="block mt-2 text-blue-500 underline hover:text-blue-600"
-        href="https://reactrouter.com/docs"
+        to="/auth/github"
       >
         Sign in with GitHub
-      </a>
+      </Link>
     </div>
   );
+}
+
+export async function loader({ request }: Route.LoaderArgs) {
+  const session = await getSession(request.headers.get("Cookie"));
+  const user = session.get("user");
+  if (user) throw redirect("/");
+  return data(null);
 }
