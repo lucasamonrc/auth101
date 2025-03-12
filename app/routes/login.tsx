@@ -11,6 +11,12 @@ export default function Login() {
       >
         Sign in with GitHub
       </Link>
+      <Link
+        className="block mt-2 text-blue-500 underline hover:text-blue-600"
+        to="/auth/trinsic"
+      >
+        Sign in with Trinsic
+      </Link>
     </div>
   );
 }

@@ -86,6 +86,7 @@ export class TrinsicStrategy<T> extends Strategy<
     const response = await fetch(
       `https://api.trinsic.id/api/v1/sessions/${sessionId}/results`,
       {
+        method: "POST",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${this.options.accessToken}`,
@@ -101,7 +102,6 @@ export class TrinsicStrategy<T> extends Strategy<
     }
 
     const data = (await response.json()) as GetSessionResultResponse;
-
     const t = this.verify({ request, results: data });
 
     return t;

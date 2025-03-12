@@ -1,5 +1,6 @@
 import { Authenticator } from "remix-auth";
 import { GitHubStrategy } from "remix-auth-github";
+import { TrinsicStrategy } from "~/lib/trinsic-strategy";
 import type { GitHubUser, User } from "~/models/user";
 
 export let authenticator = new Authenticator<User>();
@@ -27,6 +28,28 @@ authenticator.use(
         id: user.id.toString(),
         name: user.name,
         username: user.login,
+      };
+    }
+  )
+);
+
+authenticator.use(
+  new TrinsicStrategy<User>(
+    {
+      accessToken: process.env.TRINSIC_ACCESS_TOKEN ?? "",
+      redirectURI: "http://localhost:5173/auth/trinsic/callback",
+    },
+    async ({ results }) => {
+      let user = results.identityData;
+
+      return {
+        id: user?.document?.number ?? results.session.id,
+        name:
+          (user?.person?.givenName ?? "") +
+          " " +
+          (user?.person?.familyName ?? ""),
+        username: user?.person?.givenName ?? "",
+        avatar: "",
       };
     }
   )
