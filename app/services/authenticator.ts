@@ -1,6 +1,6 @@
 import { Authenticator } from "remix-auth";
 import { GitHubStrategy } from "remix-auth-github";
-import { TrinsicStrategy } from "~/lib/trinsic-strategy";
+import { TrinsicStrategy } from "remix-auth-trinsic";
 import type { GitHubUser, User } from "~/models/user";
 
 export let authenticator = new Authenticator<User>();
