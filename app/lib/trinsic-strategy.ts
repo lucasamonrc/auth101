@@ -1,108 +1,95 @@
 import { Strategy } from "remix-auth/strategy";
-import createDebug from "debug";
 import { Cookie, SetCookie } from "@mjackson/headers";
 import { redirect } from "react-router";
-import type { GetSessionResultResponse } from "@trinsic/api";
-
-const debug = createDebug("TrinsicStrategy");
+import { SessionsApi, Configuration } from "@trinsic/api";
+import type { GetSessionResultResponse, KnownIdentityData } from "@trinsic/api";
 
 export class TrinsicStrategy<T> extends Strategy<
   T,
   TrinsicStrategy.VerifyOptions
 > {
-  name = "trinsic";
-
-  private cookieName = "trinsic-auth-strategy";
+  readonly name = "trinsic";
+  protected readonly cookieName = "trinsic-auth-strategy";
+  protected readonly api: SessionsApi;
 
   constructor(
     protected options: TrinsicStrategy.ConstructorOptions,
     verify: Strategy.VerifyFunction<T, TrinsicStrategy.VerifyOptions>
   ) {
     super(verify);
+
+    const config = new Configuration({
+      accessToken: options.accessToken,
+    });
+
+    this.api = new SessionsApi(config);
   }
 
   async authenticate(request: Request): Promise<T> {
-    debug("Request URL", request.url);
-
     let url = new URL(request.url);
 
     const sessionId = url.searchParams.get("sessionId");
-    const key = url.searchParams.get("resultsAccessKey");
+    const resultsAccessKey = url.searchParams.get("resultsAccessKey");
 
-    const signInFlow = !sessionId && !key;
-
-    if (signInFlow) {
-      debug("No sessionId or key found, starting sign in flow");
-
-      const response = await fetch(
-        "https://api.trinsic.id/api/v1/sessions/beta/widget",
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${this.options.accessToken}`,
-          },
-        }
-      );
-
-      if (!response.ok) {
-        throw new Error("Failed to start sign in flow");
-      }
-
-      const data = (await response.json()) as {
-        sessionId: string;
-        launchUrl: string;
-      };
-
-      const launchUrl = new URL(data.launchUrl);
-      launchUrl.searchParams.set("redirectUrl", this.options.redirectURI);
-
-      debug("Launch URL", launchUrl.toString());
-
-      const header = new SetCookie({
-        name: this.cookieName,
-        value: new URLSearchParams({ sessionId: data.sessionId }).toString(),
-        httpOnly: true,
-        maxAge: 60 * 5, // 5 minutes
-        path: "/",
-        sameSite: "Lax",
-      });
+    if (!sessionId || !resultsAccessKey) {
+      const { launchUrl, header } = await this.handleSignIn();
 
       throw redirect(launchUrl.toString(), {
         headers: { "Set-Cookie": header.toString() },
       });
     }
 
+    return this.handleCallback(request, resultsAccessKey);
+  }
+
+  private async handleSignIn() {
+    const response = await this.api.createWidgetSession({
+      redirectUrl: this.options.redirectUrl,
+      providers: this.options.providers,
+      knownIdentityData: this.options.knownIdentityData,
+    });
+
+    if (!response.launchUrl) {
+      throw new TrinsicApiError(
+        "Failed to start sign in flow. No launch URL returned."
+      );
+    }
+
+    if (!response.sessionId) {
+      throw new TrinsicApiError(
+        "Failed to start sign in flow. No session ID returned."
+      );
+    }
+
+    const launchUrl = new URL(response.launchUrl);
+
+    const header = new SetCookie({
+      name: this.cookieName,
+      value: new URLSearchParams({ sessionId: response.sessionId }).toString(),
+      httpOnly: true,
+      maxAge: 60 * 5, // 5 minutes
+      path: "/",
+      sameSite: "Lax",
+    });
+
+    return { launchUrl, header };
+  }
+
+  private async handleCallback(request: Request, resultsAccessKey: string) {
     const cookie = new Cookie(request.headers.get("Cookie") || "");
     const params = new URLSearchParams(cookie.get(this.cookieName) || "");
 
-    const ogSessionId = params.get("sessionId");
+    const sessionId = params.get("sessionId");
 
-    if (!ogSessionId) {
+    if (!sessionId) {
       throw new ReferenceError("Missing sessionId in cookie");
     }
 
-    debug("Fetching verification results");
-    const response = await fetch(
-      `https://api.trinsic.id/api/v1/sessions/${sessionId}/results`,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${this.options.accessToken}`,
-        },
-        body: JSON.stringify({
-          resultsAccessKey: key,
-        }),
-      }
-    );
+    const results = await this.api.getSessionResult(sessionId, {
+      resultsAccessKey,
+    });
 
-    if (!response.ok) {
-      throw new Error("Failed to fetch verification results");
-    }
-
-    const data = (await response.json()) as GetSessionResultResponse;
-    const t = this.verify({ request, results: data });
+    const t = this.verify({ request, results });
 
     return t;
   }
@@ -116,6 +103,15 @@ export namespace TrinsicStrategy {
 
   export interface ConstructorOptions {
     accessToken: string;
-    redirectURI: string;
+    redirectUrl: string;
+    providers?: string[];
+    knownIdentityData?: KnownIdentityData;
+  }
+}
+
+class TrinsicApiError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "TrinsicApiError";
   }
 }

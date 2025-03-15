@@ -37,7 +37,7 @@ authenticator.use(
   new TrinsicStrategy<User>(
     {
       accessToken: process.env.TRINSIC_ACCESS_TOKEN ?? "",
-      redirectURI: "http://localhost:5173/auth/trinsic/callback",
+      redirectUrl: "http://localhost:5173/auth/trinsic/callback",
     },
     async ({ results }) => {
       let user = results.identityData;

@@ -14,9 +14,8 @@
 ## Trinsic Strategy
 
 - [x] Implement rough strategy
-- [ ] Allow provider specification
-- [ ] Allow iframe invocation
-- [ ] Use SDK in the background
+- [x] Allow provider specification
+- [x] Use SDK in the background
 - [ ] Move to its own repo
 - [ ] Write tests
 - [ ] Publish package
